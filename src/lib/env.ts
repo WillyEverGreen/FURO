@@ -17,7 +17,17 @@ function requireEnv(name: string): string {
 }
 
 export function getPublicEnv(name: PublicEnvKey): string {
-  return requireEnv(name);
+  // Next.js only inlines NEXT_PUBLIC_* env vars in client bundles when accessed statically.
+  const value =
+    name === "NEXT_PUBLIC_SUPABASE_URL"
+      ? process.env.NEXT_PUBLIC_SUPABASE_URL
+      : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!value) {
+    throw new Error(`[ENV] Missing ${name}. ${ENV_HINT}`);
+  }
+
+  return value;
 }
 
 export function getServerEnv(name: ServerEnvKey): string {
