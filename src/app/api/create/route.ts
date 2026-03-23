@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { slug, password, expiration, title, content } = body;
+    const { slug, editCode, password, expiration, title, content } = body;
 
     let finalSlug = slug;
 
@@ -59,7 +59,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const edit_token = nanoid(32);
+    let edit_token: string;
+    if (typeof editCode === "string" && editCode.trim().length > 0) {
+      edit_token = editCode.trim();
+      if (edit_token.length < 6 || edit_token.length > 128) {
+        return NextResponse.json(
+          { error: "Edit code must be 6-128 characters." },
+          { status: 400 },
+        );
+      }
+    } else {
+      edit_token = nanoid(32);
+    }
+
     const password_hash = password ? await bcrypt.hash(password, 10) : null;
 
     let expires_at: string | null = null;

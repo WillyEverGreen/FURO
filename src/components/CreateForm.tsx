@@ -7,6 +7,7 @@ import { SLUG_REGEX } from "@/lib/constants";
 export default function CreateForm() {
   const router = useRouter();
   const [slug, setSlug] = useState("");
+  const [editCode, setEditCode] = useState("");
   const [password, setPassword] = useState("");
   const [expiration, setExpiration] = useState("never");
   const [content, setContent] = useState("");
@@ -33,7 +34,7 @@ export default function CreateForm() {
       const res = await fetch("/api/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, password, expiration, content }),
+        body: JSON.stringify({ slug, editCode, password, expiration, content }),
       });
 
       const data = await res.json();
@@ -94,7 +95,7 @@ export default function CreateForm() {
       </div>
 
       {/* Options row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs text-[#888] mb-1.5 font-medium tracking-wide uppercase">
             Password (optional)
@@ -105,6 +106,18 @@ export default function CreateForm() {
             placeholder="Leave empty for public"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-[#888] mb-1.5 font-medium tracking-wide uppercase">
+            Edit Code (optional)
+          </label>
+          <input
+            type="text"
+            className="input"
+            placeholder="Set your own edit code"
+            value={editCode}
+            onChange={(e) => setEditCode(e.target.value)}
           />
         </div>
         <div>
