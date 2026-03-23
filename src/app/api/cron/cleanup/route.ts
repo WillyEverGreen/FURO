@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const cronSecret = getServerEnv("CRON_SECRET");
 
 // Vercel Cron: runs every hour
 // Configure in vercel.json: { "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 * * * *" }] }
 export async function GET(req: NextRequest) {
   // Only allow Vercel cron or internal requests
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { getServerEnv } from "@/lib/env";
 
 let _client: SupabaseClient | null = null;
 
@@ -8,14 +9,8 @@ let _client: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient {
   if (_client) return _client;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    throw new Error(
-      "Missing Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local"
-    );
-  }
+  const url = getServerEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const key = getServerEnv("SUPABASE_SERVICE_ROLE_KEY");
 
   _client = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
