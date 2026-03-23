@@ -62,8 +62,8 @@ export default function CreateForm() {
     <form onSubmit={handleSubmit} className="space-y-5 animate-fade-in">
       {/* Slug */}
       <div>
-        <label className="block text-xs text-[#888] mb-1.5 font-medium tracking-wide uppercase">
-          Page URL
+        <label className="block text-xs text-[#888] mb-1.5 font-medium tracking-wide uppercase text-white/70">
+          Page URL (required)
         </label>
         <div className="flex items-center gap-0 rounded-lg border border-[#2a2a2a] bg-[#111] overflow-hidden focus-within:border-white transition-all duration-200">
           <span className="px-3 py-3 text-[#555] text-sm select-none shrink-0">mysite.com/</span>

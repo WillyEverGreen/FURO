@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rentry
 
-## Getting Started
+Rentry is a Next.js app for creating and sharing rich text pages with optional file uploads and expiration.
 
-First, run the development server:
+## Local Development
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment template and fill in values:
+
+```bash
+cp .env.example .env
+```
+
+3. Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production Build Check
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Use this command before every deploy:
 
-## Learn More
+```bash
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy To Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 1. Import the repository
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- In Vercel, choose **Add New Project** and import this repo.
+- Framework preset: **Next.js** (auto-detected).
+- Build command: `next build` (default).
+- Output: leave default.
 
-## Deploy on Vercel
+### 2. Configure environment variables (Project Settings -> Environment Variables)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Required values:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `CRON_SECRET`
+
+Tip: `.env.example` documents every required variable.
+
+### 3. Cron job
+
+`vercel.json` includes:
+
+- path: `/api/cron/cleanup`
+- schedule: `0 * * * *` (hourly)
+
+Make sure `CRON_SECRET` is set in Vercel so the cron route can authenticate.
+
+### 4. Deploy
+
+- Trigger a deploy from Vercel UI, or push to the connected production branch.
+
+## Notes
+
+- The cleanup cron route is configured to run in Node.js runtime with an increased function duration limit.
+- Keep server secrets (`SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`) only in secure environment variables, never in client code.

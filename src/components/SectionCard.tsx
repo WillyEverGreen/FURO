@@ -6,6 +6,10 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import FileUploader from "./FileUploader";
 import type { Section, FileMeta } from "@/types";
+import { formatBytes } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   section: Section;
@@ -14,12 +18,6 @@ interface Props {
   editToken: string;
   onUpdate: (updated: Section) => void;
   onDelete: (id: string) => void;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
 function CopyIcon({ text }: { text: string }) {
@@ -31,7 +29,6 @@ function CopyIcon({ text }: { text: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback for older browsers
       const el = document.createElement("textarea");
       el.value = text;
       document.body.appendChild(el);
@@ -47,7 +44,7 @@ function CopyIcon({ text }: { text: string }) {
     <button
       onClick={copy}
       title="Copy content"
-      className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md hover:bg-[#222] text-[#555] hover:text-white"
+      className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
     >
       {copied ? (
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
@@ -106,85 +103,96 @@ export default function SectionCard({
   };
 
   return (
-    <div className={`card group animate-fade-in ${isEditMode ? "card-edit" : ""}`}>
+    <div className={`group animate-fade-in rounded-lg border border-border/40 bg-[#0f0f0f] p-8 space-y-6 focus-within:border-primary/30 transition-all`}>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3">
         {isEditMode ? (
-          <input
-            className="flex-1 bg-transparent text-white text-sm font-semibold outline-none border-b border-[#2a2a2a] focus:border-[#555] pb-1 transition-all duration-200 placeholder-[#444]"
-            placeholder="Section title…"
+          <Input
             value={title}
             onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="SECTION TITLE (OPTIONAL)"
+            className="flex-1 bg-transparent border-b border-transparent focus:border-border/40 rounded-none px-0 focus-visible:ring-0 placeholder:text-muted-foreground/30 text-foreground text-[10px] font-bold uppercase tracking-[0.2em]"
           />
         ) : (
-          <h2 className="flex-1 text-sm font-semibold text-white">{title || "Untitled Section"}</h2>
+          <h2 className="flex-1 text-sm font-semibold text-foreground tracking-wide pb-2 border-b border-border">
+            {title || "Untitled Section"}
+          </h2>
         )}
 
-        {/* Copy icon – shown on hover in read mode, always shown in edit mode */}
-        {content && <CopyIcon text={content} />}
+        {content && !isEditMode && <CopyIcon text={content} />}
 
         {isEditMode && (
-          <div className="flex items-center gap-1">
-            <button
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setPreview((p) => !p)}
-              className="btn-ghost text-xs px-2 py-1"
+              className="text-xs text-muted-foreground h-7"
             >
               {preview ? "Edit" : "Preview"}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onDelete(section.id)}
-              className="btn-danger text-xs px-2 py-1"
+              className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive h-7"
             >
               Delete
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {/* Content */}
       {isEditMode && !preview ? (
-        <textarea
-          className="input font-mono text-sm"
-          placeholder="Write markdown here…"
+        <Textarea
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
-          rows={8}
+          placeholder="Type something..."
+          className="min-h-[300px] resize-none bg-[#0a0a0a] border-border/40 px-4 py-4 focus-visible:ring-1 focus-visible:ring-primary/20 text-foreground/90 font-mono text-[13px] leading-relaxed shadow-sm"
         />
       ) : (
-        <div className="prose-rentry">
+        <div className="prose-rentry text-sm text-secondary-foreground font-mono">
           {content ? (
             <ReactMarkdown rehypePlugins={[rehypeSanitize]} remarkPlugins={[remarkGfm]}>
               {content}
             </ReactMarkdown>
           ) : (
-            <p className="text-[#444] text-sm italic">No content yet.</p>
+            <p className="text-muted-foreground text-sm italic">No content.</p>
           )}
         </div>
       )}
 
-      {/* Files – shown as name badges only, no URLs */}
+      {/* Files */}
       {(files.length > 0 || isEditMode) && (
-        <div className="mt-4 pt-4 border-t border-[#1a1a1a]">
+        <div className="mt-4 pt-4 border-t border-border">
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {files.map((f) => (
                 <div
                   key={f.id}
-                  className="group/file flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0d0d0d] border border-[#1a1a1a] text-xs text-[#888]"
+                  className="group/file flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-secondary/50 border border-border text-xs text-muted-foreground hover:bg-secondary/70 transition-colors"
                 >
-                  {/* File icon */}
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[#555]">
-                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                    <polyline points="13 2 13 9 20 9" />
-                  </svg>
-                  <span className="max-w-[160px] truncate text-[#aaa]">{f.file_name}</span>
-                  <span className="text-[#444] shrink-0">{formatBytes(f.file_size)}</span>
+                  <a
+                    href={f.url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 flex-1 min-w-0"
+                    title={`Download ${f.file_name}`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-muted-foreground/70">
+                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                      <polyline points="13 2 13 9 20 9" />
+                    </svg>
+                    <span className="max-w-[160px] truncate text-foreground hover:underline decoration-white/30 underline-offset-2">{f.file_name}</span>
+                    <span className="opacity-50 shrink-0">{formatBytes(f.file_size)}</span>
+                  </a>
 
                   {isEditMode && (
                     <button
                       onClick={() => handleDeleteFile(f.id)}
                       disabled={deletingFile === f.id}
-                      className="ml-1 text-[#444] hover:text-red-400 transition-colors"
+                      className="ml-1 text-muted-foreground hover:text-destructive transition-colors ml-2"
                       title="Remove file"
                     >
                       {deletingFile === f.id ? (
@@ -210,7 +218,7 @@ export default function SectionCard({
             />
           )}
           {isEditMode && files.length >= 5 && (
-            <p className="text-xs text-[#555] text-center py-2">Max 5 files per section reached.</p>
+            <p className="text-xs text-muted-foreground py-2 tracking-wide">Max 5 files per section reached.</p>
           )}
         </div>
       )}

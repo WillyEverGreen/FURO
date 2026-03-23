@@ -2,24 +2,15 @@
 
 import { use, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
 import SectionCard from "@/components/SectionCard";
-import PasswordPrompt from "@/components/PasswordPrompt";
-import FooterNav from "@/components/FooterNav";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import type { Page, Section } from "@/types";
 import { MAX_SECTIONS_PER_PAGE } from "@/lib/constants";
 import { nanoid } from "nanoid";
 
 interface Props {
   params: Promise<{ slug: string }>;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
 export default function EditPage({ params }: Props) {
@@ -31,262 +22,217 @@ export default function EditPage({ params }: Props) {
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
-  const [needsPassword, setNeedsPassword] = useState(false);
-  const [unlockedPwd, setUnlockedPwd] = useState<string | null>(null);
 
-  // Auth
+  // Auth/Save state
   const [editCode, setEditCode] = useState("");
   const [newEditCode, setNewEditCode] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [editToken, setEditToken] = useState("");
-
-  // Save / delete
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  const fetchPage = useCallback(async (pwd?: string) => {
+  const fetchPage = useCallback(async () => {
     setLoading(true);
     setPageError("");
-    const headers: Record<string, string> = {};
-    if (pwd) headers["x-page-password"] = pwd;
-    const res = await fetch(`/api/page/${slug}`, { headers });
+    // Use x-intent: edit to bypass view password check for the editor preview
+    const res = await fetch(`/api/page/${slug}`, { 
+      headers: { "x-intent": "edit" } 
+    });
     const data = await res.json();
-    if (res.status === 401 && data.requires_password) {
-      setNeedsPassword(true); setLoading(false); return;
-    }
     if (!res.ok) { setPageError(data.error ?? "Page not found."); setLoading(false); return; }
     setPage(data.page);
     setSections(data.page.sections ?? []);
-    setNeedsPassword(false);
     setLoading(false);
   }, [slug]);
 
   useEffect(() => { fetchPage(); }, [fetchPage]);
 
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editCode.trim()) return;
-    setAuthLoading(true); setAuthError("");
-    const res = await fetch("/api/auth/edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, edit_token: editCode.trim() }),
-    });
-    if (res.ok) {
-      setEditToken(editCode.trim());
-      setIsEditMode(true);
-    } else {
-      setAuthError("Wrong edit code.");
-    }
-    setAuthLoading(false);
-  };
-
   const handleSave = async () => {
-    setSaving(true); setSaveMsg("");
-    const body: Record<string, unknown> = { sections };
-    if (newUrl.trim()) body.new_slug = newUrl.trim();
+    if (!editCode.trim()) {
+      setError("Enter the Current Edit Code to save changes.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    const body: Record<string, unknown> = {
+      sections,
+      password: newEditCode.trim() || undefined,
+    };
+
     const res = await fetch(`/api/page/${slug}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-edit-token": editToken },
+      headers: { 
+        "Content-Type": "application/json", 
+        "x-edit-token": editCode.trim() 
+      },
       body: JSON.stringify(body),
     });
+    
     if (res.ok) {
-      setSaveMsg("Saved ✓");
-      setTimeout(() => setSaveMsg(""), 2500);
-      if (newUrl.trim()) router.push(`/${newUrl.trim()}`);
+      router.push(`/${slug}`);
     } else {
       const d = await res.json();
-      setSaveMsg(d.error ?? "Save failed.");
+      setError(d.error ?? "Save failed. Check your edit code.");
     }
     setSaving(false);
   };
 
   const handleDelete = async () => {
-    if (!confirm("Permanently delete this page?")) return;
+    if (!editCode.trim()) {
+      setError("Enter the Current Edit Code to delete this page.");
+      return;
+    }
+    if (!confirm("Are you sure you want to delete this page?")) return;
+    
     setDeleting(true);
-    await fetch(`/api/page/${slug}`, { method: "DELETE", headers: { "x-edit-token": editToken } });
-    router.push("/");
+    setError("");
+    
+    const res = await fetch(`/api/page/${slug}`, { 
+      method: "DELETE", 
+      headers: { "x-edit-token": editCode.trim() } 
+    });
+
+    if (res.ok) {
+      router.push("/");
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Delete failed. Check your edit code.");
+      setDeleting(false);
+    }
   };
 
   const addSection = () => {
     if (sections.length >= MAX_SECTIONS_PER_PAGE) return;
     setSections(prev => [...prev, {
-      id: `temp_${nanoid(8)}`, page_id: page!.id,
-      title: "", content: "", sort_order: prev.length,
+      id: crypto.randomUUID(), page_id: page!.id,
+      title: "New Section", content: "", sort_order: prev.length,
       created_at: new Date().toISOString(), files: [],
     }]);
   };
 
-  // ── States ──
   if (loading) return (
-    <main className="min-h-screen flex items-center justify-center">
-      <span className="spinner scale-150" />
-    </main>
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <span className="spinner" />
+    </div>
   );
 
-  if (needsPassword) return (
-    <PasswordPrompt slug={slug} onSuccess={(pwd) => { setUnlockedPwd(pwd); fetchPage(pwd); }} />
-  );
-
-  if (pageError) return (
-    <main className="max-w-3xl mx-auto px-4 py-10 min-h-screen flex flex-col">
-      <div className="text-center py-24 flex-1">
-        <p className="text-[#333] text-6xl mb-4">404</p>
-        <p className="text-[#555] text-sm">{pageError}</p>
-        <a href="/" className="text-xs text-[#555] hover:text-white transition-colors mt-4 inline-block">← new page</a>
-      </div>
-      <FooterNav />
-    </main>
+  if (pageError || !page) return (
+    <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
+      <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-[0.2em]">{pageError || "Page not found."}</p>
+      <Button variant="link" onClick={() => router.push("/")} className="mt-4 text-[10px] uppercase font-bold tracking-[0.2em] opacity-40 hover:opacity-100 transition-opacity">Back to Home</Button>
+    </div>
   );
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10 min-h-screen flex flex-col">
+    <div className="animate-fade-in flex flex-col min-h-[calc(100vh-140px)]">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-10 select-none">
+        <a href="/" className="hover:text-foreground transition-all underline decoration-muted-foreground/20 underline-offset-4">RENTRY</a>
+        <span className="opacity-20 font-light">/</span>
+        <a href={`/${slug}`} className="hover:text-foreground transition-all underline decoration-muted-foreground/20 underline-offset-4 tracking-[0.3em]">{slug.toUpperCase()}</a>
+        <span className="opacity-20 font-light">/</span>
+        <span className="text-foreground tracking-[0.3em]">EDIT</span>
+      </nav>
+
       <div className="flex-1">
-        {/* Slug breadcrumb */}
-        <div className="mb-6 text-xs text-[#555] flex items-center gap-2">
-          <a href="/" className="hover:text-white transition-colors">Rentry</a>
-          <span>/</span>
-          <a href={`/${slug}`} className="hover:text-white transition-colors">{slug}</a>
-          <span>/</span>
-          <span className="text-[#888]">edit</span>
-        </div>
+        <div className="space-y-6">
+          {/* Active Editor Sections */}
+          {sections.map(s => (
+            <SectionCard
+              key={s.id} 
+              section={s} 
+              isEditMode={true}
+              pageSlug={slug} 
+              editToken={editCode} // token is passed but won't be valid until Save is clicked
+              onUpdate={updated => setSections(prev => prev.map(x => x.id === updated.id ? updated : x))}
+              onDelete={id => setSections(prev => prev.filter(x => x.id !== id))}
+            />
+          ))}
 
-        {/* ── Sections: read-only preview (dimmed) before unlock, full editor after ── */}
-        {!isEditMode ? (
-          /* Dimmed preview */
-          <div className={sections.length > 3 ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 opacity-50 pointer-events-none select-none" : "space-y-5 mb-8 opacity-50 pointer-events-none select-none"}>
-            {sections.length === 0 ? (
-              <div className="text-center py-12 text-[#333] text-sm col-span-full">No sections yet.</div>
-            ) : sections.map(s => (
-              <div key={s.id} className={`card ${sections.length > 3 ? "max-h-[300px] overflow-hidden flex flex-col" : ""}`}>
-                {s.title && <h2 className="text-sm font-semibold text-[#ccc] mb-3 shrink-0">{s.title}</h2>}
-                <div className={`prose-rentry text-sm flex-1 ${sections.length > 3 ? "overflow-hidden mask-bottom" : ""}`}>
-                  {s.content ? (
-                    <ReactMarkdown rehypePlugins={[rehypeSanitize]} remarkPlugins={[remarkGfm]}>
-                      {s.content}
-                    </ReactMarkdown>
-                  ) : <p className="text-[#444] text-sm italic">No content.</p>}
-                </div>
-                {s.files && s.files.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-2 shrink-0">
-                    {s.files.map(f => (
-                      <div key={f.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0d0d0d] border border-[#1a1a1a] text-xs text-[#666]">
-                        <span className="truncate max-w-[140px]">{f.file_name}</span>
-                        <span className="text-[#444]">{formatBytes(f.file_size)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-        ) : (
-          /* Full editor */
-          <div className="space-y-4 mb-8">
-            {sections.map(s => (
-              <SectionCard
-                key={s.id} section={s} isEditMode={true}
-                pageSlug={slug} editToken={editToken}
-                onUpdate={updated => setSections(prev => prev.map(x => x.id === updated.id ? updated : x))}
-                onDelete={id => setSections(prev => prev.filter(x => x.id !== id))}
-              />
-            ))}
-            {sections.length < MAX_SECTIONS_PER_PAGE && (
-              <div className="flex justify-center mt-2">
-                <button
-                  onClick={addSection}
-                  className="btn btn-ghost py-2 px-6"
-                  style={{ borderStyle: "dashed" }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-2 inline">
-                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Add Section
-                </button>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* ── Edit form at bottom — matches reference image exactly ── */}
-        <div className="border-t border-[#1a1a1a] pt-5">
-          {saveMsg && (
-            <div className="mb-3 text-sm text-center text-[#888] border border-[#2a2a2a] rounded-lg py-2 animate-fade-in">
-              {saveMsg}
-            </div>
+          {/* Add Section Button */}
+          {sections.length < MAX_SECTIONS_PER_PAGE && (
+             <button
+               onClick={addSection}
+               className="w-full border-2 border-dashed border-border/30 rounded-lg py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground hover:border-ring transition-all bg-[#0a0a0a]/50"
+             >
+               + Add Section
+             </button>
           )}
 
-          <form onSubmit={isEditMode ? (e) => { e.preventDefault(); handleSave(); } : handleUnlock}>
-            {/* Row 1: edit code + optional fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <input
-                type="password"
-                className="input text-sm py-2"
-                placeholder="Enter edit code"
-                value={editCode}
-                onChange={e => setEditCode(e.target.value)}
-                disabled={isEditMode}
-                autoComplete="off"
-                autoFocus={!isEditMode}
-              />
-              <input
-                type="text"
-                className="input text-sm py-2"
-                placeholder="New edit code — optional"
-                value={newEditCode}
-                onChange={e => setNewEditCode(e.target.value)}
-                disabled={!isEditMode}
-              />
-              <input
-                type="text"
-                className="input text-sm py-2"
-                placeholder="New url — optional"
-                value={newUrl}
-                onChange={e => setNewUrl(e.target.value)}
-                disabled={!isEditMode}
-              />
-            </div>
+          {/* Authorization & Save Area */}
+          <div className="border-t border-border mt-12 pt-10 pb-12">
+            <div className="w-full space-y-8">
+              <div>
+                <h3 className="text-[10px] font-bold text-foreground mb-1 uppercase tracking-[0.3em]">
+                  Authorize Changes
+                </h3>
+                <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-[0.2em] opacity-40">
+                  Enter your edit code to save or delete this page.
+                </p>
+              </div>
 
-            {authError && <p className="text-red-400 text-xs mb-2">{authError}</p>}
-
-            {/* Row 2: action buttons */}
-            <div className="flex items-center gap-2">
-              {!isEditMode ? (
-                <>
-                  <button type="submit" className="btn btn-primary text-xs px-4 py-2" disabled={authLoading || !editCode.trim()}>
-                    {authLoading ? <><span className="spinner" /> …</> : "Edit →"}
-                  </button>
-                  <a href={`/${slug}`} className="btn btn-ghost text-xs px-4 py-2">Back</a>
-                </>
-              ) : (
-                <>
-                  <button type="submit" className="btn btn-primary text-xs px-4 py-2" disabled={saving}>
-                    {saving ? <><span className="spinner" /> Saving…</> : "Save"}
-                  </button>
-                  <a href={`/${slug}`} className="btn btn-ghost text-xs px-4 py-2">Back</a>
-                  <div className="flex-1" />
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="btn btn-danger text-xs px-4 py-2"
-                  >
-                    {deleting ? "Deleting…" : "Delete"}
-                  </button>
-                </>
+              {error && (
+                <p className="text-red-400 text-[10px] font-bold uppercase tracking-wider py-1">{error}</p>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-2 block ml-1">
+                    Current Edit Code
+                  </label>
+                  <Input
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value)}
+                    placeholder="••••••••"
+                    type="password"
+                    className="bg-[#0f0f0f] border-border/40 text-foreground placeholder:text-muted-foreground/20 h-11"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-2 block ml-1">
+                    New Edit Code (Optional)
+                  </label>
+                  <Input
+                    value={newEditCode}
+                    onChange={(e) => setNewEditCode(e.target.value)}
+                    placeholder="Optional"
+                    type="password"
+                    className="bg-[#0f0f0f] border-border/40 text-foreground placeholder:text-muted-foreground/20 h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex-1 sm:flex-none bg-[#111] border border-border/60 text-foreground hover:bg-[#1a1a1a] px-12 h-12 text-[10px] font-bold uppercase tracking-[0.3em] shadow-sm transition-all"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => router.push(`/${slug}`)}
+                    className="flex-1 sm:flex-none text-muted-foreground hover:text-foreground h-12 px-6 text-[10px] font-bold uppercase tracking-[0.2em]"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+                <Button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  variant="ghost"
+                  className="w-full sm:w-auto text-red-400/60 hover:text-red-500 h-12 px-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors"
+                >
+                  {deleting ? "Deleting..." : "Delete Page"}
+                </Button>
+              </div>
             </div>
-          </form>
+          </div>
         </div>
       </div>
-
-      <FooterNav />
-    </main>
+    </div>
   );
 }

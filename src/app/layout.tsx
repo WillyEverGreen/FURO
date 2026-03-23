@@ -3,7 +3,7 @@ import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,8 +25,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className="bg-black text-white antialiased min-h-screen">{children}</body>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className="bg-background text-foreground antialiased min-h-screen flex flex-col font-mono">
+        <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-10">
+          {children}
+        </main>
+      </body>
     </html>
   );
 }

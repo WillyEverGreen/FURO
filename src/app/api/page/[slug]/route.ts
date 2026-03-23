@@ -28,13 +28,16 @@ export async function GET(
 
   // Password check for private pages
   if (page.visibility === "private") {
-    const passwordHeader = req.headers.get("x-page-password");
-    if (!passwordHeader) {
-      return NextResponse.json({ error: "Password required.", requires_password: true }, { status: 401 });
-    }
-    const valid = await bcrypt.compare(passwordHeader, page.password_hash);
-    if (!valid) {
-      return NextResponse.json({ error: "Incorrect password." }, { status: 403 });
+    const isEditIntent = req.headers.get("x-intent") === "edit";
+    if (!isEditIntent) {
+      const passwordHeader = req.headers.get("x-page-password");
+      if (!passwordHeader) {
+        return NextResponse.json({ error: "Password required.", requires_password: true }, { status: 401 });
+      }
+      const valid = await bcrypt.compare(passwordHeader, page.password_hash);
+      if (!valid) {
+        return NextResponse.json({ error: "Incorrect password." }, { status: 403 });
+      }
     }
   }
 
@@ -133,23 +136,64 @@ export async function PUT(
     }
   }
 
-  // Delete existing sections and replace (simpler than diffing)
-  await supabaseAdmin.from("sections").delete().eq("page_id", page.id);
-
-  const inserts = sections.map((s: { title: string; content: string; sort_order: number }, i: number) => ({
-    page_id: page.id,
-    title: s.title ?? "",
-    content: s.content ?? "",
+  // 1. Identify existing section IDs in the request to avoid deleting them
+  const incomingSections = sections.map((s: any, i: number) => ({
+    ...s,
     sort_order: s.sort_order ?? i,
   }));
 
-  const { error } = await supabaseAdmin.from("sections").insert(inserts);
-  if (error) {
-    console.error("[ERROR] Failed to update sections:", error);
+  const realIds = incomingSections
+    .filter((s: any) => s.id && !s.id.startsWith("temp_"))
+    .map((s: any) => s.id);
+
+  // 2. Delete sections that are no longer in the request
+  if (realIds.length > 0) {
+    await supabaseAdmin
+      .from("sections")
+      .delete()
+      .eq("page_id", page.id)
+      .not("id", "in", realIds);
+  } else {
+    // If no real IDs are provided, delete all existing sections for this page
+    await supabaseAdmin.from("sections").delete().eq("page_id", page.id);
+  }
+
+  // 3. Separate sections into those to update (upsert) and those to insert (new)
+  const toUpsert = incomingSections.map((s: any) => {
+    const isNew = !s.id || s.id.startsWith("temp_");
+    return {
+      id: isNew ? undefined : s.id,
+      page_id: page.id,
+      title: s.title ?? "",
+      content: s.content ?? "",
+      sort_order: s.sort_order,
+    };
+  });
+
+  const { error: upsertError } = await supabaseAdmin
+    .from("sections")
+    .upsert(toUpsert, { onConflict: "id" });
+
+  if (upsertError) {
+    console.error("[ERROR] Failed to update sections:", upsertError);
     return NextResponse.json({ error: "Failed to update sections." }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  // 4. Update page edit_token if requested
+  const { password: new_edit_token } = body;
+  if (new_edit_token && new_edit_token.trim()) {
+    const { error: pageUpdateError } = await supabaseAdmin
+      .from("pages")
+      .update({ edit_token: new_edit_token.trim() })
+      .eq("id", page.id);
+
+    if (pageUpdateError) {
+      console.error("[ERROR] Failed to update page credentials:", pageUpdateError);
+      return NextResponse.json({ error: "Failed to update edit code." }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ success: true, new_edit_token });
 }
 
 // DELETE: delete page and all storage files (requires edit_token)

@@ -26,4 +26,7 @@ export interface Page {
   created_at: string;
   expires_at: string | null;
   sections: Section[];
+  views?: number;
+  password_hash?: string;
+  is_password_protected?: boolean;
 }

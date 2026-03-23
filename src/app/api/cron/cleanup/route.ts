@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 // Vercel Cron: runs every hour
 // Configure in vercel.json: { "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 * * * *" }] }
 export async function GET(req: NextRequest) {
