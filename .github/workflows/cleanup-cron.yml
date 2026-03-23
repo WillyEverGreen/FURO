@@ -1,0 +1,35 @@
+name: Cleanup Cron
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call cleanup endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing required secrets: APP_URL and/or CRON_SECRET"
+            exit 1
+          fi
+
+          URL="${APP_URL%/}/api/cron/cleanup"
+          STATUS=$(curl -sS -o /tmp/cleanup_response.txt -w "%{http_code}" \
+            -X GET "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP status: $STATUS"
+          cat /tmp/cleanup_response.txt
+
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Cleanup call failed"
+            exit 1
+          fi
